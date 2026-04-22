@@ -132,19 +132,67 @@ class ImageContentModel(BaseModel):
         )
 
 
-def _is_converse_supported_document_format(ext: str) -> TypeGuard[DocumentFormatType]:
-    supported_formats = {
-        "pdf",
-        "csv",
-        "doc",
-        "docx",
-        "xls",
-        "xlsx",
-        "html",
-        "txt",
-        "md",
-    }
-    return ext in supported_formats
+# Mapping of file extensions to Bedrock Converse API document formats.
+# Code/script files are mapped to "txt" since Bedrock needs a format hint
+# for byte decoding, and the LLM understands code from content regardless.
+EXTENSION_TO_DOCUMENT_FORMAT: dict[str, DocumentFormatType] = {
+    # Native document formats
+    "pdf": "pdf",
+    "csv": "csv",
+    "doc": "doc",
+    "docx": "docx",
+    "xls": "xls",
+    "xlsx": "xlsx",
+    "html": "html",
+    "txt": "txt",
+    "md": "md",
+    # Code files → treat as plain text
+    "py": "txt",
+    "ipynb": "txt",
+    "js": "txt",
+    "jsx": "txt",
+    "ts": "txt",
+    "tsx": "txt",
+    "java": "txt",
+    "cs": "txt",
+    "php": "txt",
+    "c": "txt",
+    "cpp": "txt",
+    "cxx": "txt",
+    "h": "txt",
+    "hpp": "txt",
+    "rs": "txt",
+    "r": "txt",
+    "rmd": "txt",
+    "swift": "txt",
+    "go": "txt",
+    "rb": "txt",
+    "kt": "txt",
+    "kts": "txt",
+    "m": "txt",
+    "scala": "txt",
+    "dart": "txt",
+    "lua": "txt",
+    "pl": "txt",
+    "pm": "txt",
+    "t": "txt",
+    "sh": "txt",
+    "bash": "txt",
+    "zsh": "txt",
+    "log": "txt",
+    "ini": "txt",
+    "config": "txt",
+    "json": "txt",
+    "proto": "txt",
+    "yaml": "txt",
+    "yml": "txt",
+    "toml": "txt",
+    "sql": "txt",
+    "bat": "txt",
+    "coffee": "txt",
+    "tex": "txt",
+    "latex": "txt",
+}
 
 
 def _convert_to_valid_file_name(file_name: str) -> str:
@@ -190,14 +238,14 @@ class AttachmentContentModel(BaseModel):
         except:
             path = Path(self.file_name)
 
-        # e.g. "document.txt" -> "txt"
-        format = path.suffix[1:]
+        # e.g. "document.txt" -> "txt", ".R" -> "r" (lowercased for lookup)
+        ext = path.suffix[1:].lower()
 
         # e.g. "document.txt" -> "document"
         name = _convert_to_valid_file_name(path.stem)
 
         return (
-            format if _is_converse_supported_document_format(format) else None,
+            EXTENSION_TO_DOCUMENT_FORMAT.get(ext),
             name,
         )
 
