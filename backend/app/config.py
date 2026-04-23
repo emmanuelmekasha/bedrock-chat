@@ -23,7 +23,7 @@ class EmbeddingConfig(TypedDict):
 DEFAULT_GENERATION_CONFIG: GenerationParams = {
     # Minimum (Haiku) is 4096
     # Ref: https://docs.anthropic.com/en/docs/about-claude/models/all-models#model-comparison
-    "max_tokens": 4096,
+    "max_tokens": 16384,
     "top_k": 250,
     "top_p": 0.999,
     "temperature": 1.0,
