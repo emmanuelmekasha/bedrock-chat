@@ -15,8 +15,11 @@ const useScroll = (conversationId?: string) => {
       return;
     }
     const listener = () => {
-      // Enable auto-scroll when scrolled to the bottom
-      if (elem.scrollTop + elem.clientHeight === elem.scrollHeight) {
+      // Enable auto-scroll when scrolled to within 10px of the bottom.
+      // Using a tolerance threshold instead of strict equality prevents
+      // sub-pixel layout shifts (e.g. from code block rendering) from
+      // accidentally re-enabling auto-scroll when the user has scrolled up.
+      if ((elem.scrollHeight - elem.scrollTop - elem.clientHeight) < 10) {
         setDisabled(false);
       } else {
         setDisabled(true);
