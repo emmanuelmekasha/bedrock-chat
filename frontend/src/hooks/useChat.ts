@@ -51,6 +51,11 @@ const NEW_MESSAGE_ID = {
 const USE_STREAMING: boolean =
   import.meta.env.VITE_APP_USE_STREAMING === 'true';
 
+// Debounce interval for streaming renders (ms).
+// Tokens are buffered and rendered at this rate to avoid excessive re-renders.
+// 50ms ≈ 20 renders/sec — visually smooth, much less CPU work.
+const STREAMING_RENDER_INTERVAL = 50;
+
 const getTextContentBody = (content: Content[]): string => {
   const textContent = content.find(
     (c): c is TextContent => c.contentType === 'text'
@@ -128,7 +133,6 @@ const useChatState = create<{
     ) => {
       set(() => ({
         chats: produce(get().chats, (draft) => {
-          // 追加対象が子ノードの場合は親ノードに参照情報を追加
           if (draft[id] && parentMessageId && parentMessageId !== 'system') {
             draft[id][parentMessageId] = {
               ...draft[id][parentMessageId],
@@ -171,14 +175,12 @@ const useChatState = create<{
         chats: produce(state.chats, (draft) => {
           const childrenIds = [...draft[id][messageId].children];
 
-          // childrenに設定されているノードも全て削除
           while (childrenIds.length > 0) {
             const targetId = childrenIds.pop()!;
             childrenIds.push(...draft[id][targetId].children);
             delete draft[id][targetId];
           }
 
-          // 削除対象のノードを他ノードの参照から削除
           Object.keys(draft[id]).forEach((key) => {
             const idx = draft[id][key].children.findIndex(
               (c) => c === messageId
@@ -209,7 +211,6 @@ const useChatState = create<{
     getPostedModel: () => {
       return (
         get().chats[get().conversationId]?.system?.model ??
-        // 画面に即時反映するためNEW_MESSAGEを評価
         get().chats['']?.[NEW_MESSAGE_ID.ASSISTANT]?.model
       );
     },
@@ -329,7 +330,6 @@ const useChat = () => {
     }
   }, [supportReasoning, setReasoningEnabled]);
 
-  // 画面に即時反映させるために、Stateを更新する処理
   const pushNewMessage = (
     parentMessageId: string | null,
     messageContent: MessageContent
@@ -371,7 +371,6 @@ const useChat = () => {
     const isNewChat = conversationId ? false : true;
     const newConversationId = ulid();
 
-    // エラーリトライ時に同期が間に合わないため、Stateを直接参照
     const tmpMessages = convertMessageMapToArray(
       useChatState.getState().chats[conversationId] ?? {},
       currentMessageId
@@ -456,8 +455,14 @@ const useChat = () => {
     // post message
     const postPromise = new Promise<void>((resolve, reject) => {
       if (USE_STREAMING) {
+        // Debounced subscription: buffer tokens and render at STREAMING_RENDER_INTERVAL
+        let flushTimer: ReturnType<typeof setTimeout> | null = null;
         const subscription = streamingActor.subscribe(state => {
-          editMessage(conversationId, NEW_MESSAGE_ID.ASSISTANT, state.context.text);
+          if (flushTimer) return;
+          flushTimer = setTimeout(() => {
+            flushTimer = null;
+            editMessage(conversationId, NEW_MESSAGE_ID.ASSISTANT, state.context.text);
+          }, STREAMING_RENDER_INTERVAL);
         });
         postStreaming({
           input,
@@ -466,9 +471,20 @@ const useChat = () => {
           },
         })
           .then(() => {
+            // Final flush: ensure last tokens are rendered
+            if (flushTimer) {
+              clearTimeout(flushTimer);
+              flushTimer = null;
+            }
+            const finalText = streamingActor.getSnapshot().context.text;
+            editMessage(conversationId, NEW_MESSAGE_ID.ASSISTANT, finalText);
             resolve();
           })
           .catch((e) => {
+            if (flushTimer) {
+              clearTimeout(flushTimer);
+              flushTimer = null;
+            }
             reject(e);
           })
           .finally(() => {
@@ -537,9 +553,14 @@ const useChat = () => {
     const currentContentBody = getTextContentBody(lastMessage.content);
     const currentMessage = messages[messages.length - 1];
 
-    // WARNING: Non-streaming is not supported from the UI side as it is planned to be DEPRICATED.
+    // Debounced subscription for continue generate
+    let flushTimer: ReturnType<typeof setTimeout> | null = null;
     const subscription = streamingActor.subscribe(state => {
-      editMessage(conversationId, currentMessage.id, currentContentBody + state.context.text);
+      if (flushTimer) return;
+      flushTimer = setTimeout(() => {
+        flushTimer = null;
+        editMessage(conversationId, currentMessage.id, currentContentBody + state.context.text);
+      }, STREAMING_RENDER_INTERVAL);
     });
     postStreaming({
       input,
@@ -548,10 +569,21 @@ const useChat = () => {
       },
     })
       .then(() => {
+        // Final flush
+        if (flushTimer) {
+          clearTimeout(flushTimer);
+          flushTimer = null;
+        }
+        const finalText = streamingActor.getSnapshot().context.text;
+        editMessage(conversationId, currentMessage.id, currentContentBody + finalText);
         mutate();
       })
       .catch((e) => {
         console.error(e);
+        if (flushTimer) {
+          clearTimeout(flushTimer);
+          flushTimer = null;
+        }
       })
       .finally(() => {
         subscription.unsubscribe();
@@ -560,8 +592,7 @@ const useChat = () => {
   };
 
   /**
-   * 再生成
-   * @param props content: 内容を上書きしたい場合に設定  messageId: 再生成対象のmessageId  botId: ボットの場合は設定する
+   * Regenerate
    */
   const regenerate = (props?: {
     enableReasoning: boolean;
@@ -570,14 +601,11 @@ const useChat = () => {
     bot?: BotInputType;
   }) => {
     let index: number = -1;
-    // messageIdが指定されている場合は、指定されたメッセージをベースにする
     if (props?.messageId) {
       index = messages.findIndex((m) => m.id === props.messageId);
     }
 
-    // 最新のメッセージがUSERの場合は、エラーとして処理する
     const isRetryError = messages[messages.length - 1].role === 'user';
-    // messageIdが指定されていない場合は、最新のメッセージを再生成する
     if (index === -1) {
       index = isRetryError ? messages.length - 1 : messages.length - 2;
     }
@@ -593,7 +621,6 @@ const useChat = () => {
       }
     });
 
-    // Stateを書き換え後の内容に更新
     if (props?.content) {
       editMessage(conversationId, parentMessage.id, props.content);
     }
@@ -614,7 +641,6 @@ const useChat = () => {
 
     setPostingMessage(true);
 
-    // 画面に即時反映するために、Stateを更新する
     if (isRetryError) {
       pushMessage(
         conversationId ?? '',
@@ -640,8 +666,14 @@ const useChat = () => {
 
     setCurrentMessageId(NEW_MESSAGE_ID.ASSISTANT);
 
+    // Debounced subscription for regenerate
+    let flushTimer: ReturnType<typeof setTimeout> | null = null;
     const subscription = streamingActor.subscribe(state => {
-      editMessage(conversationId, NEW_MESSAGE_ID.ASSISTANT, state.context.text);
+      if (flushTimer) return;
+      flushTimer = setTimeout(() => {
+        flushTimer = null;
+        editMessage(conversationId, NEW_MESSAGE_ID.ASSISTANT, state.context.text);
+      }, STREAMING_RENDER_INTERVAL);
     });
     postStreaming({
       input,
@@ -650,10 +682,21 @@ const useChat = () => {
       },
     })
       .then(() => {
+        // Final flush
+        if (flushTimer) {
+          clearTimeout(flushTimer);
+          flushTimer = null;
+        }
+        const finalText = streamingActor.getSnapshot().context.text;
+        editMessage(conversationId, NEW_MESSAGE_ID.ASSISTANT, finalText);
         mutate();
       })
       .catch((e) => {
         console.error(e);
+        if (flushTimer) {
+          clearTimeout(flushTimer);
+          flushTimer = null;
+        }
         setCurrentMessageId(NEW_MESSAGE_ID.USER);
         removeMessage(conversationId, NEW_MESSAGE_ID.ASSISTANT);
       })
@@ -689,7 +732,6 @@ const useChat = () => {
     reasoningEnabled,
     setReasoningEnabled,
     supportReasoning,
-    // エラーのリトライ
     retryPostChat: (params: {
       enableReasoning: boolean;
       content?: string;
@@ -701,8 +743,6 @@ const useChat = () => {
       }
       const latestMessage = messages[length_ - 1];
       if (latestMessage.sibling.length === 1) {
-        // 通常のメッセージ送信時
-        // エラー発生時の最新のメッセージはユーザ入力;
         removeMessage(conversationId, latestMessage.id);
 
         const latestMessageBody = getTextContentBody(latestMessage.content);
@@ -718,7 +758,6 @@ const useChat = () => {
             : undefined,
         });
       } else {
-        // 再生成時
         const latestMessageBody = getTextContentBody(latestMessage.content);
         regenerate({
           enableReasoning: params.enableReasoning,
