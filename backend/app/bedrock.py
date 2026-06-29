@@ -607,6 +607,14 @@ def is_tooluse_supported(model: type_model_name) -> bool:
     ]
 
 
+def is_top_k_supported(model: type_model_name) -> bool:
+    """Claude 4.7+ Opus models deprecate the top_k parameter."""
+    return model not in [
+        "claude-v4.7-opus",
+        "claude-v4.8-opus",
+    ]
+
+
 def is_adaptive_thinking_model(model: type_model_name) -> bool:
     """Claude 4.6+ models use adaptive thinking instead of extended thinking with budget_tokens."""
     return model in [
@@ -1157,14 +1165,15 @@ def generation_params_to_converse_configuration(
                         else DEFAULT_GENERATION_CONFIG.get("stop_sequences", [])
                     ),
                 },
-                "additionalModelRequestFields": {
+            }
+            if is_top_k_supported(model):
+                converse_configuration["additionalModelRequestFields"] = {
                     "top_k": (
                         generation_params.top_k
                         if generation_params
                         else DEFAULT_GENERATION_CONFIG["top_k"]
                     ),
-                },
-            }
+                }
 
     # "claude-v4.5-sonnet" cannot specify temperature and top_p together due to specifications.
     # https://docs.aws.amazon.com/bedrock/latest/userguide/model-parameters-anthropic-claude-messages-request-response.html
