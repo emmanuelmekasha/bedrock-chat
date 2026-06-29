@@ -58,6 +58,16 @@ const translation = {
         description:
           'Modelo principal que planeja com mais cuidado, sustenta tarefas de agente por mais tempo e opera de forma confiável em grandes bases de código com janela de contexto de 1M de tokens.',
       },
+      'claude-v4.7-opus': {
+        label: 'Claude 4.7 (Opus)',
+        description:
+          'Modelo Opus de alta capacidade projetado para programação, fluxos de trabalho empresariais e tarefas de agente de longa duração.',
+      },
+      'claude-v4.8-opus': {
+        label: 'Claude 4.8 (Opus)',
+        description:
+          'Modelo Opus mais recente com raciocínio aprimorado, programação e capacidades de agente em janelas de contexto estendidas.',
+      },
       'claude-v3-opus': {
         label: 'Claude 3 (Opus)',
         description: 'Modelo poderoso para tarefas altamente complexas.',

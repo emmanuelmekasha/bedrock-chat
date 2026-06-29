@@ -51,6 +51,16 @@ const translation = {
         description:
           'Model unggulan yang merencanakan lebih hati-hati, mempertahankan tugas agen lebih lama, dan beroperasi dengan andal di codebase besar dengan jendela konteks 1M token.',
       },
+      'claude-v4.7-opus': {
+        label: 'Claude 4.7 (Opus)',
+        description:
+          'Model Opus berkemampuan tinggi yang dirancang untuk pemrograman, alur kerja perusahaan, dan tugas agen jangka panjang.',
+      },
+      'claude-v4.8-opus': {
+        label: 'Claude 4.8 (Opus)',
+        description:
+          'Model Opus terbaru dengan penalaran, pemrograman, dan kemampuan agen yang ditingkatkan di jendela konteks yang diperluas.',
+      },
       'claude-v3-opus': {
         label: 'Claude 3 (Opus)',
         description: 'Model yang kuat untuk tugas-tugas yang sangat kompleks.',

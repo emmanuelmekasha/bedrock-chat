@@ -43,6 +43,16 @@ const translation: typeof en = {
         description:
           'より慎重に計画し、エージェントタスクをより長く持続し、大規模コードベースで確実に動作するフラッグシップモデル（1Mトークンコンテキストウィンドウ）。',
       },
+      'claude-v4.7-opus': {
+        label: 'Claude 4.7 (Opus)',
+        description:
+          'コーディング、エンタープライズワークフロー、長時間のエージェントタスク向けに構築された高性能Opusモデル。',
+      },
+      'claude-v4.8-opus': {
+        label: 'Claude 4.8 (Opus)',
+        description:
+          '拡張コンテキストウィンドウで強化された推論、コーディング、エージェント機能を備えた最新のOpusモデル。',
+      },
       'claude-v4-sonnet': {
         label: 'Claude 4 (Sonnet)',
         description:

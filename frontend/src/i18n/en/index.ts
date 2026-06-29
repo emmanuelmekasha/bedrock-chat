@@ -40,6 +40,16 @@ const translation = {
         description:
           'Flagship model that plans more carefully, sustains agentic tasks longer, and operates reliably in massive codebases with 1M token context window.',
       },
+      'claude-v4.7-opus': {
+        label: 'Claude 4.7 (Opus)',
+        description:
+          'High-capability Opus model built for coding, enterprise workflows, and long-running agentic tasks.',
+      },
+      'claude-v4.8-opus': {
+        label: 'Claude 4.8 (Opus)',
+        description:
+          'Latest Opus model with enhanced reasoning, coding, and agentic capabilities across extended context windows.',
+      },
       'claude-v4-sonnet': {
         label: 'Claude 4 (Sonnet)',
         description:
