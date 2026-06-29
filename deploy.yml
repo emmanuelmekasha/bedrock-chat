@@ -10,7 +10,7 @@ Parameters:
     Default: "false"
   Ipv4Ranges:
     Type: String
-    Default: '["0.0.0.0/1","128.0.0.0/1"]' # Set default values based on current config
+    Default: '["128.231.0.0/16","137.187.0.0/16","165.112.0.0/16","156.40.0.0/16","10.0.0.0/8"]' # Set default values based on current config
   Ipv6Ranges:
     Type: String
     Default: '["0000:0000:0000:0000:0000:0000:0000:0000/1","8000:0000:0000:0000:0000:0000:0000:0000/1"]' # Set default values based on current config
