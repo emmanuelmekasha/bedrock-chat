@@ -20,7 +20,9 @@ from app.repositories.conversation import (
 from app.repositories.conversation_search import find_conversations_by_query
 from app.repositories.custom_bot import alias_exists, store_alias
 from app.repositories.models.conversation import (
+    AttachmentContentModel,
     ConversationModel,
+    ImageContentModel,
     MessageModel,
     ReasoningContentModel,
     RelatedDocumentModel,
@@ -682,18 +684,28 @@ def propose_conversation_title(
     )
     messages.append(new_message)
 
-    # Invoke Bedrock
-    args = compose_args_for_converse_api(
-        messages=[
-            message
-            for message in messages
-            if not any(
-                isinstance(content, ToolUseContentModel)
-                or isinstance(content, ToolResultContentModel)
-                or isinstance(content, ReasoningContentModel)
-                for content in message.content
+    # Invoke Bedrock — strip non-text content to reduce payload size and cost
+    text_only_messages = []
+    for message in messages:
+        if any(
+            isinstance(content, ToolUseContentModel)
+            or isinstance(content, ToolResultContentModel)
+            or isinstance(content, ReasoningContentModel)
+            for content in message.content
+        ):
+            continue
+        # Strip attachments and images — only text is needed for title generation
+        text_content = [
+            c for c in message.content
+            if not isinstance(c, (AttachmentContentModel, ImageContentModel))
+        ]
+        if text_content:
+            text_only_messages.append(
+                SimpleMessageModel(role=message.role, content=text_content)
             )
-        ],
+
+    args = compose_args_for_converse_api(
+        messages=text_only_messages,
         model=model,
         stream=False,
     )
@@ -709,6 +721,33 @@ def propose_conversation_title(
     return reply_txt
 
 
+def _strip_large_bodies(content_list: list) -> list:
+    """Strip large binary bodies from content to avoid exceeding API Gateway 6MB limit.
+    The frontend only needs file names and metadata for display."""
+    from app.routes.schemas.conversation import (
+        AttachmentContent as AttachmentContentSchema,
+        ImageContent as ImageContentSchema,
+    )
+
+    stripped = []
+    for c in content_list:
+        if isinstance(c, AttachmentContentModel):
+            stripped.append(AttachmentContentSchema(
+                content_type="attachment",
+                file_name=c.file_name,
+                body=b"",
+            ))
+        elif isinstance(c, ImageContentModel):
+            stripped.append(ImageContentSchema(
+                content_type="image",
+                media_type=c.media_type,
+                body=b"",
+            ))
+        else:
+            stripped.append(c.to_content())
+    return stripped
+
+
 def fetch_conversation(user_id: str, conversation_id: str) -> Conversation:
     conversation = find_conversation_by_id(user_id, conversation_id)
 
@@ -717,7 +756,7 @@ def fetch_conversation(user_id: str, conversation_id: str) -> Conversation:
         try:
             message_map[message_id] = MessageOutput(
                 role=message.role,
-                content=[c.to_content() for c in message.content],
+                content=_strip_large_bodies(message.content),
                 model=message.model,
                 children=message.children,
                 parent=message.parent,
