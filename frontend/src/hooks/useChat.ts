@@ -515,6 +515,8 @@ const useChat = () => {
       .catch((e) => {
         console.error(e);
         removeMessage(conversationId, NEW_MESSAGE_ID.ASSISTANT);
+        removeMessage(conversationId, NEW_MESSAGE_ID.USER);
+        mutate();
       })
       .finally(() => {
         setPostingMessage(false);
@@ -697,8 +699,8 @@ const useChat = () => {
           clearTimeout(flushTimer);
           flushTimer = null;
         }
-        setCurrentMessageId(NEW_MESSAGE_ID.USER);
         removeMessage(conversationId, NEW_MESSAGE_ID.ASSISTANT);
+        mutate();
       })
       .finally(() => {
         subscription.unsubscribe();

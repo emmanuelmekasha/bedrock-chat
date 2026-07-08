@@ -157,7 +157,6 @@ def prepare_conversation(
     # Append user chat input to the conversation
     if not chat_input.continue_generate:
         new_message = MessageModel.from_message_input(chat_input.message)
-        new_message.parent = parent_id
         new_message.create_time = current_time
 
         if chat_input.message.message_id:
@@ -165,6 +164,20 @@ def prepare_conversation(
         else:
             message_id = str(ULID())
 
+        # Validate parent_id exists in message_map; fall back to last_message_id or "system"
+        if parent_id not in conversation.message_map:
+            logger.warning(
+                f"parent_id '{parent_id}' not found in message_map. "
+                f"Falling back to last_message_id or 'system'."
+            )
+            if conversation.last_message_id and conversation.last_message_id in conversation.message_map:
+                parent_id = conversation.last_message_id
+            elif "instruction" in conversation.message_map:
+                parent_id = "instruction"
+            else:
+                parent_id = "system"
+
+        new_message.parent = parent_id
         conversation.message_map[message_id] = new_message
         conversation.message_map[parent_id].children.append(message_id)  # type: ignore
 
