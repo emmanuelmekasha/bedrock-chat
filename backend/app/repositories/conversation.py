@@ -169,12 +169,23 @@ def find_conversation_by_id(user_id: str, conversation_id: str) -> ConversationM
     else:
         message_map = json.loads(item["MessageMap"])
 
+    try:
+        validated_message_map = {
+            k: MessageModel.model_validate(v) for k, v in message_map.items()
+        }
+    except Exception as e:
+        logger.error(
+            f"Failed to validate message_map for conversation "
+            f"'{decompose_conv_id(item['SK'])}': {e}"
+        )
+        raise
+
     conv = ConversationModel(
         id=decompose_conv_id(item["SK"]),
         create_time=float(item["CreateTime"]),
         title=item["Title"],
         total_price=item.get("TotalPrice", 0),
-        message_map={k: MessageModel.model_validate(v) for k, v in message_map.items()},
+        message_map=validated_message_map,
         last_message_id=item["LastMessageId"],
         bot_id=item["BotId"] if "BotId" in item else None,
         should_continue=item.get("ShouldContinue", False),

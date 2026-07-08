@@ -1,4 +1,5 @@
 from app.repositories.conversation import (
+    RecordNotFoundError,
     change_conversation_title,
     delete_conversation_by_id,
     delete_conversation_by_user_id,
@@ -28,7 +29,7 @@ from app.usecases.chat import (
     search_conversations as search_conversations_usecase,
 )
 from app.user import User
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, HTTPException, Request
 
 router = APIRouter(tags=["conversation"])
 
@@ -89,7 +90,10 @@ def get_conversation(request: Request, conversation_id: str):
     """Get a conversation history"""
     current_user: User = request.state.current_user
 
-    output = fetch_conversation(current_user.id, conversation_id)
+    try:
+        output = fetch_conversation(current_user.id, conversation_id)
+    except RecordNotFoundError:
+        raise HTTPException(status_code=404, detail="Conversation not found")
     return output
 
 

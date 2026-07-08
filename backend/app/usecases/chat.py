@@ -712,48 +712,63 @@ def propose_conversation_title(
 def fetch_conversation(user_id: str, conversation_id: str) -> Conversation:
     conversation = find_conversation_by_id(user_id, conversation_id)
 
-    message_map = {
-        message_id: MessageOutput(
-            role=message.role,
-            content=[c.to_content() for c in message.content],
-            model=message.model,
-            children=message.children,
-            parent=message.parent,
-            feedback=(
-                FeedbackOutput(
-                    thumbs_up=message.feedback.thumbs_up,
-                    category=message.feedback.category,
-                    comment=message.feedback.comment,
-                )
-                if message.feedback
-                else None
-            ),
-            used_chunks=(
-                [
-                    Chunk(
-                        content=c.content,
-                        content_type=c.content_type,
-                        source=c.source,
-                        rank=c.rank,
+    message_map = {}
+    for message_id, message in conversation.message_map.items():
+        try:
+            message_map[message_id] = MessageOutput(
+                role=message.role,
+                content=[c.to_content() for c in message.content],
+                model=message.model,
+                children=message.children,
+                parent=message.parent,
+                feedback=(
+                    FeedbackOutput(
+                        thumbs_up=message.feedback.thumbs_up,
+                        category=message.feedback.category,
+                        comment=message.feedback.comment,
                     )
-                    for c in message.used_chunks
-                ]
-                if message.used_chunks
-                else None
-            ),
-            thinking_log=(
-                [m.to_schema() for m in message.thinking_log]
-                if message.thinking_log
-                else None
-            ),
-        )
-        for message_id, message in conversation.message_map.items()
-    }
+                    if message.feedback
+                    else None
+                ),
+                used_chunks=(
+                    [
+                        Chunk(
+                            content=c.content,
+                            content_type=c.content_type,
+                            source=c.source,
+                            rank=c.rank,
+                        )
+                        for c in message.used_chunks
+                    ]
+                    if message.used_chunks
+                    else None
+                ),
+                thinking_log=(
+                    [m.to_schema() for m in message.thinking_log]
+                    if message.thinking_log
+                    else None
+                ),
+            )
+        except Exception as e:
+            logger.error(
+                f"Failed to convert message '{message_id}' in conversation "
+                f"'{conversation_id}': {e}"
+            )
+            raise
+
     # Omit instruction
     if "instruction" in message_map:
         for c in message_map["instruction"].children:
+            if c not in message_map:
+                logger.warning(
+                    f"Instruction child '{c}' not found in message_map for "
+                    f"conversation '{conversation_id}'. Skipping."
+                )
+                continue
             message_map[c].parent = "system"
-        message_map["system"].children = message_map["instruction"].children
+        message_map["system"].children = [
+            c for c in message_map["instruction"].children if c in message_map
+        ]
 
         del message_map["instruction"]
 
